@@ -11,6 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import PCA
 import spacy
+from spacy.cli import download # Importación vital para la descarga automática
 
 # --- 1. CONFIGURACIÓN VISUAL ---
 st.set_page_config(
@@ -20,20 +21,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. FUNCIÓN DE CARGA NLP (CORREGIDA Y ROBUSTA) ---
+# --- 2. FUNCIÓN DE CARGA NLP (CORREGIDA) ---
 @st.cache_resource
 def cargar_modelo_nlp():
     """
-    Carga el modelo de lenguaje de Spacy.
-    Si no existe en el sistema (ej. en la nube), lo descarga automáticamente
-    durante la ejecución para evitar errores de instalación.
+    Carga el modelo de lenguaje. Si falla, usa el descargador interno de Spacy
+    que es más estable en la nube que os.system.
     """
     try:
         if not spacy.util.is_package("es_core_news_sm"):
-            os.system("python -m spacy download es_core_news_sm")
+            # Descarga nativa de Spacy (más segura)
+            download("es_core_news_sm")
         return spacy.load("es_core_news_sm")
     except Exception as e:
-        st.error(f"Error cargando modelo NLP: {e}")
+        st.warning(f"Nota: Modo NLP limitado. ({e})")
         return None
 
 nlp = cargar_modelo_nlp()
@@ -119,7 +120,7 @@ INFO_PARTIDOS = {
     "Nueva República": {"Candidato": "Fabricio Alvarado", "Equipo": "David Segura, Rosalía Brown", "Tendencia": "Conservadurismo Religioso", "Estrategia": "Fórmula endogámica y voto duro."},
     "Pueblo Soberano": {"Candidato": "Laura Fernández", "Equipo": "Francisco Gamboa, Douglas Soto", "Tendencia": "Oficialismo Rodriguista", "Estrategia": "Continuidad del gobierno Chaves."},
     "Partido Integración Nacional": {"Candidato": "Luis Amador", "Equipo": "Jorge Borbón, Katya Berdugo", "Tendencia": "Populismo Tecnocrático", "Estrategia": "Capitalizar popularidad personal post-ruptura."},
-    "Unidos Podemos": {"Candidato": "Natalia Díaz", "Equipo": "Jorge Ocampo, Luis Diego Vargas", "Tendencia": "Liberalismo / Ex-Oficialismo", "Estrategia": "Voto mixto liberal y simpatizante gobierno."},
+    "Unidos Podemos": {"Candidato": "Natalia Díaz", "Equipo": "Jorge Ocampo, Luis Diego Vargas", "Tendencia": "Liberalismo / Ex-Oficialismo", "Estrategia": "Busca capturar un voto mixto."},
     "Progreso Social Democrático": {"Candidato": "Luz Mary Alpízar", "Equipo": "Frank Mc Kenzie, Maritza Bustamante", "Tendencia": "Oficialismo Estructural", "Estrategia": "Marca 2022 sin respaldo presidencial."},
     "Partido Nueva Generación": {"Candidato": "Fernando Zamora", "Equipo": "Lisbeth Quesada, Yeudy Araya", "Tendencia": "Derecha Conservadora", "Estrategia": "Importación de figura externa (Ex-PLN)."},
     "Avanza": {"Candidato": "Jose Miguel Aguilar", "Equipo": "Evita Arguedas, Marcela Ortiz", "Tendencia": "Derecha Populista", "Estrategia": "Narrativa 'Modelo Salvadoreño'."},
@@ -173,7 +174,7 @@ El pipeline de datos incluye:
 3.  **Enriquecimiento:** Cálculo de variables sintéticas (índices de estatismo, mercado, etc.).
 """
 
-# --- 5. CARGA DE DATOS ---
+# --- 5. CARGA DE DATOS (CON MANEJO DE ERRORES) ---
 STOPWORDS_BASURA = {
     'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'una', 'por', 'con', 'no', 'su', 'sus', 'para', 'al', 'lo', 'como', 'más', 'pero', 'o', 'este', 'esta', 'son', 'ese', 'esa', 'si', 'sin', 'sobre', 'entre', 'ya', 'todo', 'toda', 'todos', 'todas', 'esta', 'estos', 'estas', 'nos', 'ni', 'muy', 'donde', 'que', 'qué', 'uno', 'dos', 'tres', 'parte', 'tiene', 'tienen', 'ser', 'es', 'fue', 'sido', 'está', 'están', 'sea', 'sean', 'ante', 'bajo', 'cabe', 'contra', 'desde', 'durante', 'hacia', 'hasta', 'mediante', 'para', 'según', 'so', 'tras', 'versus', 'vía', 
     'costa', 'rica', 'nacional', 'país', 'gobierno', 'plan', 'programa', 'propuesta', 'desarrollo', 'social', 'política', 'sistema', 'servicio', 'servicios', 'sector', 'sectores', 'hacer', 'cada', 'año', 'años', '2026', '2030', 'acciones', 'objetivo', 'estrategia', 'marco', 'nivel', 'forma', 'manera', 'caso', 'tema', 'temas', 'través', 'además', 'así', 'ello', 'bien', 'gran', 'mismo', 'fin', 'tal', 'vez', 'cual', 'cuales', 'debe', 'ser', 'parte', 'tipo', 'siguiente', 'san', 'josé', 'jose', 'república', 'central', 'general', 'materia', 'ámbito', 'punto', 'página', 'artículo',
@@ -183,17 +184,25 @@ STOPWORDS_BASURA = {
 @st.cache_data
 def cargar_datos():
     ruta = '/Users/david/Documents/Ideas de investigaciones/Planes gobierno/Prueba2/Base_Enriquecida_IA.xlsx'
-    # Si no encuentra el Excel, busca el CSV (por compatibilidad con la nube)
-    if not os.path.exists(ruta):
-        ruta_csv = 'datos.csv'
-        if os.path.exists(ruta_csv):
-            df = pd.read_csv(ruta_csv)
-        else:
-            return None
-    else:
-        df = pd.read_excel(ruta)
     
-    # Normalización de Nombres
+    # LÓGICA ROBUSTA DE CARGA: Busca Excel, si falla, busca CSV (compatible con nube)
+    df = None
+    if os.path.exists(ruta):
+        try:
+            df = pd.read_excel(ruta)
+        except: pass
+    
+    # Fallback al CSV si el Excel falla o no existe (común en deploy)
+    if df is None:
+        if os.path.exists('datos.csv'):
+            try:
+                df = pd.read_csv('datos.csv', encoding='utf-8')
+            except UnicodeDecodeError:
+                df = pd.read_csv('datos.csv', encoding='latin-1') # Fallback encoding
+    
+    if df is None: return None
+    
+    # Normalización
     NOMBRES = {
         "PSD": "Progreso Social Democrático", "PLN": "Partido Liberación Nacional", "PUSC": "Partido Unidad Social Cristiana",
         "PAC": "Agenda Ciudadana", "FA": "Frente Amplio", "PLP": "Partido Liberal Progresista",
@@ -207,7 +216,6 @@ def cargar_datos():
     df['partido'] = df['partido'].map(NOMBRES).fillna(df['partido'])
     df = df[df['longitud'] > 60]
     
-    # Variables Sintéticas
     df['SUBJETIVIDAD'] = df['texto'].apply(lambda x: TextBlob(str(x)).sentiment.subjectivity)
     
     def calc_idx(txt, kw): return 1 if any(k in str(txt).lower() for k in kw) else 0
@@ -244,15 +252,13 @@ def interpretacion(texto):
 
 if df is not None:
     
-    # SIDEBAR (SIN BOTONES, SOLO SELECTOR)
+    # SIDEBAR
     with st.sidebar:
-        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Coat_of_arms_of_Costa_Rica.svg/200px-Coat_of_arms_of_Costa_Rica.svg.png", width=60)
-        st.title("Monitor 2026")
-        st.markdown("---")
+        st.header("Panel de Control")
         
         lista_partidos = sorted(df['partido'].unique())
         
-        # Selector Robusto
+        # SELECTOR SIMPLE Y ROBUSTO
         partidos = st.multiselect(
             "Seleccione Partidos a Comparar:", 
             lista_partidos, 
@@ -270,7 +276,7 @@ if df is not None:
             st.warning("⚠️ Selecciona al menos un partido.")
             st.stop()
 
-    # Filtrar datos
+    # Filtrar datos para análisis
     df_m = df[df['partido'].isin(partidos)]
 
     # --- MÓDULO 1: VISIÓN ESTRATÉGICA ---
@@ -396,7 +402,7 @@ if df is not None:
         with t1:
             col_sel, col_wc = st.columns([1, 3])
             with col_sel:
-                # Variable 'partidos' proviene del multiselect lateral
+                # CORRECCIÓN: Uso correcto de la variable de partidos seleccionados
                 p_sel = st.radio("Ver nube de:", partidos)
             with col_wc:
                 txt_p = " ".join(df_m[df_m['partido']==p_sel]['texto'].astype(str))
@@ -419,6 +425,7 @@ if df is not None:
 
     # --- MÓDULO 6: BUSCADOR ---
     elif menu == "6. Buscador Avanzado":
+        # Hero Section
         st.markdown("""
         <div style='background: linear-gradient(135deg, var(--primary-blue) 0%, var(--interactive) 100%); padding: 40px; border-radius: 15px; color: white; text-align: center; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);'>
             <h2 style='color: white !important;'>🔎 Explorador Semántico de Propuestas</h2>
@@ -445,7 +452,12 @@ if df is not None:
                 else: st.warning("No se encontraron resultados para ese término.")
         
         with c_guide:
-            st.info("**💡 Tips de Búsqueda:**\n* Usa términos raíz (ej: 'segur' para hallar seguridad y seguro).\n* Prueba conceptos opuestos (ej: 'gasto' vs 'inversión').")
+            st.info("""
+            **💡 Tips de Búsqueda:**
+            * Usa términos raíz (ej: "segur" para hallar seguridad y seguro).
+            * Prueba conceptos opuestos (ej: "gasto" vs "inversión").
+            * Busca nombres propios (ej: "Chaves", "Figueres").
+            """)
 
     # --- MÓDULO 7: PERFILES PARTIDARIOS ---
     elif menu == "7. Perfiles Partidarios":
