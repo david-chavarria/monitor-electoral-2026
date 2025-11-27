@@ -20,85 +20,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. SISTEMA DE CARGA ROBUSTO (A PRUEBA DE FALLOS) ---
-
+# --- 2. CARGA DE MODELO NLP (LIMPIA) ---
 @st.cache_resource
 def cargar_modelo_nlp():
-    """
-    Intenta cargar el modelo de IA. Si falla por restricciones de la nube,
-    devuelve None para activar el 'Modo Ligero' sin romper la app.
-    """
+    # Ya no descargamos aquí. Asumimos que requirements.txt hizo su trabajo.
     try:
-        # Intento 1: Carga directa
-        if spacy.util.is_package("es_core_news_sm"):
-            return spacy.load("es_core_news_sm")
-        
-        # Intento 2: Descarga en tiempo de ejecución (puede fallar en nube gratuita)
-        from spacy.cli import download
-        download("es_core_news_sm")
         return spacy.load("es_core_news_sm")
-        
-    except Exception:
-        # Si todo falla, no rompemos la app. Retornamos None y usamos diccionarios.
-        return None
+    except OSError:
+        return None # Fallback silencioso si algo pasa, para no romper la app
 
 nlp = cargar_modelo_nlp()
 
-@st.cache_data
-def cargar_datos():
-    # Lógica de reintento para lectura de archivos (UTF-8 vs Latin-1)
-    df = None
-    archivo_target = None
-    
-    # Buscar archivo (prioridad CSV por velocidad)
-    if os.path.exists('datos.csv'):
-        archivo_target = 'datos.csv'
-        try:
-            df = pd.read_csv(archivo_target, encoding='utf-8')
-        except UnicodeDecodeError:
-            df = pd.read_csv(archivo_target, encoding='latin-1')
-            
-    elif os.path.exists('Base_Enriquecida_IA.xlsx'):
-        archivo_target = 'Base_Enriquecida_IA.xlsx'
-        df = pd.read_excel(archivo_target)
-    
-    if df is None: return None
-
-    # Normalización de Nombres
-    NOMBRES = {
-        "PSD": "Progreso Social Democrático", "PLN": "Partido Liberación Nacional", "PUSC": "Partido Unidad Social Cristiana",
-        "PAC": "Agenda Ciudadana", "FA": "Frente Amplio", "PLP": "Partido Liberal Progresista",
-        "PNR": "Nueva República", "PNG": "Partido Nueva Generación", "PIN": "Partido Integración Nacional",
-        "PA": "Avanza", "PDLCT": "De la Clase Trabajadora", "ACRM": "Aquí Costa Rica Manda",
-        "PPSO": "Pueblo Soberano", "UP": "Unidos Podemos", "CR1": "Alianza Costa Rica Primero",
-        "PJSC": "Justicia Social Costarricense", "PUCD": "Unión Costarricense Democrática", "CDS": "Centro Democrático y Social",
-        "PEN": "Esperanza Nacional", "PEL": "Esperanza y Libertad", "CAC": "Agenda Ciudadana"
-    }
-    df['partido_sigla'] = df['partido']
-    df['partido'] = df['partido'].map(NOMBRES).fillna(df['partido'])
-    
-    # Filtro de calidad y limpieza de columnas
-    if 'longitud' in df.columns:
-        df = df[df['longitud'] > 60]
-    
-    # Recalcular métricas si no existen (Respaldo)
-    if 'SUBJETIVIDAD' not in df.columns:
-        df['SUBJETIVIDAD'] = df['texto'].apply(lambda x: TextBlob(str(x)).sentiment.subjectivity)
-
-    # Índices Heurísticos (Siempre disponibles)
-    def calc_idx(txt, kw): return 1 if any(k in str(txt).lower() for k in kw) else 0
-    
-    if 'IDX_ESTATISMO' not in df.columns:
-        df['IDX_ESTATISMO'] = df['texto'].apply(lambda x: calc_idx(x, ['estado', 'público', 'institución', 'rectoría', 'regulación']))
-        df['IDX_MERCADO'] = df['texto'].apply(lambda x: calc_idx(x, ['privado', 'empresa', 'mercado', 'emprendimiento', 'apertura']))
-        df['IDX_GLOBAL'] = df['texto'].apply(lambda x: calc_idx(x, ['internacional', 'mundo', 'ocde', 'fmi', 'exportación']))
-        df['IDX_SOCIAL'] = df['texto'].apply(lambda x: calc_idx(x, ['pobreza', 'mujer', 'vulnerable', 'niñez', 'derecho', 'humano']))
-
-    return df
-
-df = cargar_datos()
-
-# --- 3. DISEÑO UI/UX ---
+# --- 3. DISEÑO UI/UX AVANZADO ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
@@ -124,7 +57,7 @@ st.markdown("""
     .logo-highlight { color: var(--accent-cyan); }
     .logo-sub { font-size: 1rem; color: #64748b; font-weight: 600; letter-spacing: 0.05em; }
 
-    /* FOOTER */
+    /* FOOTER CLEAN */
     .footer-container {
         margin-top: 4rem; padding: 1.5rem; background: var(--primary-blue);
         color: white; border-radius: 12px 12px 0 0; text-align: center; font-size: 0.9rem;
@@ -140,7 +73,7 @@ st.markdown("""
     .party-card:hover { transform: translateY(-3px); }
     .party-header { font-size: 1.2rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 5px; }
     
-    /* Cajas de Interpretación */
+    /* Cajas de Interpretación (Amplias) */
     .interpretation-box {
         background-color: #ffffff; border-left: 5px solid var(--accent-cyan); padding: 20px;
         border-radius: 8px; font-size: 0.95rem; color: #334155; margin-top: 20px;
@@ -169,7 +102,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 4. DATOS DE CONTENIDO ---
+# --- 4. DATOS ---
 INFO_PARTIDOS = {
     "Agenda Ciudadana": {"Candidato": "Claudia Dobles", "Equipo": "Andrea Centeno, Luis F. Arauz", "Tendencia": "Centro-progresismo", "Estrategia": "Rebranding del PAC."},
     "Partido Liberación Nacional": {"Candidato": "Álvaro Ramos", "Equipo": "Karen Segura, Xinia Chaves", "Tendencia": "Socialdemocracia", "Estrategia": "Ruptura técnica con figuras tradicionales."},
@@ -220,29 +153,82 @@ METODOLOGIA_TEXTO = """
 El análisis se basa en la metodología del **Comparative Manifestos Project (CMP)**, el estándar académico global para el análisis de contenido político. Utilizamos técnicas de **Procesamiento de Lenguaje Natural (NLP)** para transformar texto no estructurado (PDFs) en datos cuantificables.
 
 ### 2. Variables y Algoritmos
-* **Volumen de Propuestas:** Cantidad total de unidades de sentido (párrafos o bloques semánticos) extraídos tras la limpieza de ruido.
-* **Análisis de Sentimiento (Polarity):** Se utiliza el algoritmo *TextBlob*. Asigna un valor de -1 (Muy Negativo) a +1 (Muy Positivo).
-* **Complejidad Léxica:** Calculada mediante índice *Fernandez-Huerta*. Mide la dificultad de lectura.
-* **Similitud del Coseno:** Distancia matemática entre los vectores de texto (TF-IDF) de cada partido.
+* **Volumen de Propuestas (Corpus Size):** Cantidad total de unidades de sentido (párrafos o bloques semánticos) extraídos tras la limpieza de ruido.
+* **Análisis de Sentimiento (Polarity):** Se utiliza el algoritmo *TextBlob* con léxicos adaptados. Asigna un valor de -1 (Muy Negativo/Crítico) a +1 (Muy Positivo/Esperanzador).
+* **Complejidad Léxica (Readability):** Calculada mediante el índice de *Fernandez-Huerta* para español. Mide la dificultad de lectura basándose en la longitud de las oraciones y la cantidad de sílabas. Un puntaje bajo indica lenguaje técnico/elitista; un puntaje alto indica lenguaje simple/populista.
+* **Similitud del Coseno (Cosine Similarity):** Se vectorizan los textos usando **TF-IDF** (Term Frequency-Inverse Document Frequency) para crear un espacio vectorial de n-dimensiones. Se calcula el ángulo entre los vectores de cada partido para determinar qué tan similares son sus propuestas matemáticamente (0 = Opuestos, 1 = Idénticos).
+* **Modelado de Tópicos (Topic Modeling):** Clasificación semántica basada en diccionarios de palabras clave ponderadas (Economía, Social, Seguridad, etc.) para determinar la agenda prioritaria.
+
+### 3. Procesamiento de Datos (ETL)
+El pipeline de datos incluye:
+1.  **Extracción:** Uso de `PyMuPDF` para lectura espacial de PDFs (respetando columnas).
+2.  **Limpieza:** Eliminación de *stopwords* (palabras vacías), encabezados y pies de página mediante Regex.
+3.  **Enriquecimiento:** Cálculo de variables sintéticas (índices de estatismo, mercado, etc.).
 """
 
-STOPWORDS_BASURA = {'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'una', 'por', 'con', 'no', 'su', 'sus', 'para', 'al', 'lo', 'como', 'más', 'pero', 'o', 'este', 'esta', 'son', 'ese', 'esa', 'si', 'sin', 'sobre', 'entre', 'ya', 'todo', 'toda', 'todos', 'todas', 'esta', 'estos', 'estas', 'nos', 'ni', 'muy', 'donde', 'que', 'qué', 'uno', 'dos', 'tres', 'parte', 'tiene', 'tienen', 'ser', 'es', 'fue', 'sido', 'está', 'están', 'sea', 'sean', 'ante', 'bajo', 'cabe', 'contra', 'desde', 'durante', 'hacia', 'hasta', 'mediante', 'para', 'según', 'so', 'tras', 'versus', 'vía', 'costa', 'rica', 'nacional', 'país', 'gobierno', 'plan', 'programa', 'propuesta', 'desarrollo', 'social', 'política', 'sistema', 'servicio', 'servicios', 'sector', 'sectores', 'hacer', 'cada', 'año', 'años', '2026', '2030', 'acciones', 'objetivo', 'estrategia', 'marco', 'nivel', 'forma', 'manera', 'caso', 'tema', 'temas', 'través', 'además', 'así', 'ello', 'bien', 'gran', 'mismo', 'fin', 'tal', 'vez', 'cual', 'cuales', 'debe', 'ser', 'parte', 'tipo', 'siguiente', 'san', 'josé', 'jose', 'república', 'central', 'general', 'materia', 'ámbito', 'punto', 'página', 'artículo', 'se', 'e', 'le', 'les', 'me', 'mi', 'mis', 'ha', 'han', 'hay', 'hubo', 'sino', 'porque', 'pues', 'aunque', 'mientras', 'cuando', 'donde', 'quien', 'quienes', 'ello', 'cuyo', 'cuya', 'donde', 'aquel', 'mediante', 'embargo', 'través', 'implementar', 'fortalecer'}
+# --- 5. CARGA DE DATOS ---
+STOPWORDS_BASURA = {
+    'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'una', 'por', 'con', 'no', 'su', 'sus', 'para', 'al', 'lo', 'como', 'más', 'pero', 'o', 'este', 'esta', 'son', 'ese', 'esa', 'si', 'sin', 'sobre', 'entre', 'ya', 'todo', 'toda', 'todos', 'todas', 'esta', 'estos', 'estas', 'nos', 'ni', 'muy', 'donde', 'que', 'qué', 'uno', 'dos', 'tres', 'parte', 'tiene', 'tienen', 'ser', 'es', 'fue', 'sido', 'está', 'están', 'sea', 'sean', 'ante', 'bajo', 'cabe', 'contra', 'desde', 'durante', 'hacia', 'hasta', 'mediante', 'para', 'según', 'so', 'tras', 'versus', 'vía', 
+    'costa', 'rica', 'nacional', 'país', 'gobierno', 'plan', 'programa', 'propuesta', 'desarrollo', 'social', 'política', 'sistema', 'servicio', 'servicios', 'sector', 'sectores', 'hacer', 'cada', 'año', 'años', '2026', '2030', 'acciones', 'objetivo', 'estrategia', 'marco', 'nivel', 'forma', 'manera', 'caso', 'tema', 'temas', 'través', 'además', 'así', 'ello', 'bien', 'gran', 'mismo', 'fin', 'tal', 'vez', 'cual', 'cuales', 'debe', 'ser', 'parte', 'tipo', 'siguiente', 'san', 'josé', 'jose', 'república', 'central', 'general', 'materia', 'ámbito', 'punto', 'página', 'artículo',
+    'se', 'e', 'le', 'les', 'me', 'mi', 'mis', 'ha', 'han', 'hay', 'hubo', 'sino', 'porque', 'pues', 'aunque', 'mientras', 'cuando', 'donde', 'quien', 'quienes', 'ello', 'cuyo', 'cuya', 'donde', 'aquel', 'mediante', 'embargo', 'través', 'implementar', 'fortalecer'
+}
 
-# --- 5. FUNCIONES ANALÍTICAS ROBUSTAS ---
+@st.cache_data
+def cargar_datos():
+    # Lógica de reintento para lectura de archivos (UTF-8 vs Latin-1)
+    df = None
+    
+    # 1. Intentar cargar CSV (Prioridad)
+    if os.path.exists('datos.csv'):
+        try:
+            df = pd.read_csv('datos.csv', encoding='utf-8')
+        except UnicodeDecodeError:
+            df = pd.read_csv('datos.csv', encoding='latin-1')
+            
+    # 2. Intentar cargar Excel (Respaldo Local)
+    elif os.path.exists('Base_Enriquecida_IA.xlsx'):
+        df = pd.read_excel('Base_Enriquecida_IA.xlsx')
+    
+    if df is None: return None
 
+    # Normalización
+    NOMBRES = {
+        "PSD": "Progreso Social Democrático", "PLN": "Partido Liberación Nacional", "PUSC": "Partido Unidad Social Cristiana",
+        "PAC": "Agenda Ciudadana", "FA": "Frente Amplio", "PLP": "Partido Liberal Progresista",
+        "PNR": "Nueva República", "PNG": "Partido Nueva Generación", "PIN": "Partido Integración Nacional",
+        "PA": "Avanza", "PDLCT": "De la Clase Trabajadora", "ACRM": "Aquí Costa Rica Manda",
+        "PPSO": "Pueblo Soberano", "UP": "Unidos Podemos", "CR1": "Alianza Costa Rica Primero",
+        "PJSC": "Justicia Social Costarricense", "PUCD": "Unión Costarricense Democrática", "CDS": "Centro Democrático y Social",
+        "PEN": "Esperanza Nacional", "PEL": "Esperanza y Libertad", "CAC": "Agenda Ciudadana"
+    }
+    df['partido_sigla'] = df['partido']
+    df['partido'] = df['partido'].map(NOMBRES).fillna(df['partido'])
+    df = df[df['longitud'] > 60]
+    
+    df['SUBJETIVIDAD'] = df['texto'].apply(lambda x: TextBlob(str(x)).sentiment.subjectivity)
+    
+    def calc_idx(txt, kw): return 1 if any(k in str(txt).lower() for k in kw) else 0
+    df['IDX_ESTATISMO'] = df['texto'].apply(lambda x: calc_idx(x, ['estado', 'público', 'institución', 'rectoría', 'regulación', 'fortalecer', 'crear']))
+    df['IDX_MERCADO'] = df['texto'].apply(lambda x: calc_idx(x, ['privado', 'empresa', 'mercado', 'emprendimiento', 'apertura', 'inversión', 'negocio']))
+    df['IDX_GLOBAL'] = df['texto'].apply(lambda x: calc_idx(x, ['internacional', 'mundo', 'ocde', 'fmi', 'exportación', 'global', 'extranjera']))
+    df['IDX_SOCIAL'] = df['texto'].apply(lambda x: calc_idx(x, ['pobreza', 'mujer', 'vulnerable', 'niñez', 'derecho', 'humano', 'igualdad', 'ayuda']))
+
+    return df
+
+df = cargar_datos()
+
+# --- 6. FUNCIONES ANALÍTICAS ---
 def generar_insight_texto(df_sub, variable, nombre_variable, tipo="max"):
-    if df_sub.empty: return "Sin datos suficientes para análisis."
     if tipo == "max":
         dato = df_sub.groupby('partido')[variable].mean().sort_values(ascending=False)
-        if dato.empty: return ""
         top_p = dato.idxmax()
         val = dato.max()
-        return f"🤖 **Análisis Automático:** El partido **{top_p}** lidera el índice de {nombre_variable} ({val:.2f})."
+        return f"🤖 **Análisis Automático:** El partido **{top_p}** lidera el índice de {nombre_variable} ({val:.2f}). Esto sugiere un enfoque prioritario en esta dimensión."
     elif tipo == "dist":
         est = df_sub['IDX_ESTATISMO'].mean()
         merc = df_sub['IDX_MERCADO'].mean()
         conclusion = "más Estatista" if est > merc else "más Pro-Mercado"
-        return f"🤖 **Balance Ideológico:** En el agregado, la discusión es **{conclusion}**."
+        return f"🤖 **Balance Ideológico:** En el agregado, la discusión es **{conclusion}** (Estatismo: {est:.2f} vs Mercado: {merc:.2f})."
 
 def generar_nube(texto):
     wc = WordCloud(width=800, height=400, background_color='white', stopwords=STOPWORDS_BASURA, colormap='tab10', min_font_size=10, max_words=60, regexp=r"\w+").generate(str(texto).lower())
@@ -251,13 +237,14 @@ def generar_nube(texto):
 def interpretacion(texto):
     st.markdown(f"""<div class='interpretation-box'><span class='interpretation-title'>📘 Guía de Interpretación</span>{texto}</div>""", unsafe_allow_html=True)
 
-# --- 6. INTERFAZ PRINCIPAL ---
+# --- 7. INTERFAZ PRINCIPAL ---
 
 if df is not None:
     
     # SIDEBAR
     with st.sidebar:
         st.header("Panel de Control")
+        
         lista_partidos = sorted(df['partido'].unique())
         partidos = st.multiselect("Seleccione Partidos a Comparar:", lista_partidos, default=lista_partidos[:3] if len(lista_partidos)>2 else lista_partidos)
         
@@ -268,7 +255,6 @@ if df is not None:
             st.warning("⚠️ Selecciona al menos un partido.")
             st.stop()
 
-    # Filtrar datos
     df_m = df[df['partido'].isin(partidos)]
 
     # --- CONTENIDO ---
@@ -284,18 +270,18 @@ if df is not None:
             df_tree = df_m[df_m['TEMA_IA']!='OTROS']
             fig = px.treemap(df_tree, path=['partido', 'TEMA_IA'], color='TEMA_IA', height=600)
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("Muestra el <b>peso visual</b> de cada tema. Recuadros grandes = Mayor prioridad.")
+            interpretacion("Este gráfico muestra el <b>peso visual</b> de cada tema en la agenda. Los recuadros más grandes indican que el partido dedicó más párrafos a ese tema en específico.<br><br><b>Ejemplo:</b> Si el 'Frente Amplio' tiene un recuadro de 'Social' que ocupa el 50% de su área, significa que la mitad de su discurso está enfocado en ese tema.")
         with t2:
             conteo = df_tree.groupby(['partido', 'TEMA_IA']).size().reset_index(name='n')
             conteo['pct'] = conteo.groupby('partido')['n'].transform(lambda x: 100 * x / x.sum())
             fig = px.line_polar(conteo, r='pct', theta='TEMA_IA', color='partido', line_close=True, height=600)
             fig.update_traces(fill='toself', opacity=0.2)
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("Forma puntiaguda = Especialización. Forma redonda = Generalismo.")
+            interpretacion("El radar revela la especialización del partido.<br><br><b>Forma Puntiaguda:</b> Indica un partido 'monotemático' o de nicho, que concentra toda su energía en 1 o 2 temas (ej: Solo Seguridad y Economía).<br><b>Forma Redondeada:</b> Indica un partido generalista con una propuesta balanceada en todos los frentes.")
         with t3:
             fig = px.histogram(df_tree, x="partido", color="TEMA_IA", barnorm="percent", height=500)
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("Comparativa normalizada al 100%.")
+            interpretacion("Muestra la proporción (%) dedicada a cada tema, normalizada al 100%. Esto permite comparar equitativamente partidos con planes de gobierno muy largos (ej: 200 páginas) contra planes cortos (ej: 20 páginas) para ver sus prioridades reales.")
 
     elif menu == "2. Psicometría del Discurso":
         st.markdown("## 🧠 Psicometría y Estilo")
@@ -303,16 +289,16 @@ if df is not None:
         c1, c2 = st.columns([2, 1])
         with c1:
             agg = df_m.groupby('partido').agg({'COMPLEJIDAD':'mean', 'SENTIMIENTO':'mean', 'longitud':'count'}).reset_index()
-            fig = px.scatter(agg, x='COMPLEJIDAD', y='SENTIMIENTO', size='longitud', color='partido', text='partido', height=600)
+            fig = px.scatter(agg, x='COMPLEJIDAD', y='SENTIMIENTO', size='longitud', color='partido', text='partido', height=600, labels={"COMPLEJIDAD": "Complejidad Técnica (0-100)", "SENTIMIENTO": "Sentimiento (-1 a +1)"})
             fig.update_traces(textposition='top center')
             fig.add_vline(x=agg['COMPLEJIDAD'].mean(), line_dash="dash", line_color="gray")
             fig.add_hline(y=agg['SENTIMIENTO'].mean(), line_dash="dash", line_color="gray")
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("<b>Eje X:</b> Complejidad (Simple vs Técnico). <b>Eje Y:</b> Sentimiento (Crítico vs Positivo).")
+            interpretacion("Este cuadrante posiciona el estilo de comunicación de cada partido:<br><br><b>Eje X (Complejidad):</b> Mide la dificultad de lectura.<br>• Izquierda: Lenguaje Simple/Populista (Frases cortas, vocabulario común).<br>• Derecha: Lenguaje Técnico/Académico (Párrafos largos, jerga especializada).<br><br><b>Eje Y (Sentimiento):</b> Mide la carga emocional.<br>• Arriba: Discurso Positivo/Propositivo (Esperanza, Soluciones).<br>• Abajo: Discurso Negativo/Crítico (Denuncia, Diagnóstico de crisis).")
         with c2:
-            fig = px.box(df_m, x='partido', y='SUBJETIVIDAD', color='partido', points=False)
+            fig = px.box(df_m, x='partido', y='SUBJETIVIDAD', color='partido', points=False, range_y=[0,1], labels={"SUBJETIVIDAD": "Grado de Subjetividad (0-1)"})
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("Grado de opinión vs hechos.")
+            interpretacion("Mide el grado de opinión frente a hechos.<br><br><b>0.0 (Objetivo):</b> 'El desempleo es del 10%'. (Hechos verificables).<br><b>1.0 (Subjetivo):</b> 'Es una tragedia espantosa e injusta'. (Adjetivos, juicios de valor).<br>Un partido con alta subjetividad apela más a las emociones que a la data dura.")
 
     elif menu == "3. Brújula Ideológica":
         st.markdown("## 🧭 Posicionamiento Ideológico")
@@ -320,21 +306,20 @@ if df is not None:
         t1, t2 = st.tabs(["Modelo Económico", "Modelo Político"])
         idx_data = df_m.groupby('partido')[['IDX_ESTATISMO', 'IDX_MERCADO', 'IDX_SOCIAL', 'IDX_GLOBAL']].mean().reset_index()
         with t1:
-            fig = px.scatter(idx_data, x='IDX_ESTATISMO', y='IDX_MERCADO', text='partido', size_max=60, color='partido', height=550)
+            fig = px.scatter(idx_data, x='IDX_ESTATISMO', y='IDX_MERCADO', text='partido', size_max=60, color='partido', height=550, labels={"IDX_ESTATISMO": "Frecuencia: Estatismo", "IDX_MERCADO": "Frecuencia: Mercado"})
             fig.update_traces(textposition='top center', marker=dict(size=20))
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("<b>Eje X:</b> Estado. <b>Eje Y:</b> Mercado.")
+            interpretacion("Muestra la tensión entre dos visiones de desarrollo:<br><br><b>Eje X (Estatismo):</b> Frecuencia de términos como 'regulación', 'rectoría', 'fortalecer instituciones'.<br><b>Eje Y (Mercado):</b> Frecuencia de términos como 'sector privado', 'emprendimiento', 'competitividad'.<br><br><b>Cuadrante Superior Derecho:</b> Propone una Economía Mixta (fuerte Estado y fuerte Mercado).")
         with t2:
-            fig = px.scatter(idx_data, x='IDX_SOCIAL', y='IDX_GLOBAL', text='partido', size_max=60, color='partido', height=550)
+            fig = px.scatter(idx_data, x='IDX_SOCIAL', y='IDX_GLOBAL', text='partido', size_max=60, color='partido', height=550, labels={"IDX_SOCIAL": "Frecuencia: Agenda Social", "IDX_GLOBAL": "Frecuencia: Globalismo"})
             fig.update_traces(textposition='top center', marker=dict(size=20))
             st.plotly_chart(fig, use_container_width=True)
-            interpretacion("<b>Eje X:</b> Social. <b>Eje Y:</b> Global.")
+            interpretacion("Contrasta el foco de atención del partido:<br><br><b>Eje X (Social):</b> Foco en pobreza, derechos humanos y grupos vulnerables.<br><b>Eje Y (Global):</b> Foco en comercio exterior, OCDE y relaciones internacionales.<br><br>Un partido muy a la derecha en el eje X pero abajo en el Y sería un partido 'Nacional-Social' o proteccionista.")
 
     elif menu == "4. Geopolítica":
         st.markdown("## 🌍 Instituciones y Territorio")
         INSTITUCIONES = ["CCSS", "MEP", "MOPT", "ICE", "INS", "AyA", "IMAS", "INA", "UCR", "Hacienda", "Banco Central", "Contraloría", "Poder Judicial", "OIJ", "Fuerza Pública", "RECOPE", "SINAC", "Sala IV"]
         LUGARES = ['Guanacaste', 'Limón', 'Puntarenas', 'Cartago', 'Heredia', 'Alajuela', 'San José', 'Zona Norte', 'Zona Sur', 'GAM', 'Estados Unidos', 'China', 'Europa', 'OCDE']
-        
         def count_entities(df_sub, lista):
             res = []
             for p in df_sub['partido'].unique():
@@ -343,21 +328,20 @@ if df is not None:
                     c = txt.count(i.lower())
                     if c > 0: res.append({'Partido': p, 'Entidad': i, 'Menciones': c})
             return pd.DataFrame(res)
-
         c1, c2 = st.columns(2)
         with c1:
             df_i = count_entities(df_m, INSTITUCIONES)
             if not df_i.empty:
                 fig = px.bar(df_i, y='Entidad', x='Menciones', color='Partido', orientation='h', barmode='group', height=600, title="Instituciones Públicas")
                 st.plotly_chart(fig, use_container_width=True)
-                interpretacion("Foco Burocrático: Instituciones más mencionadas.")
+                interpretacion("Este ranking revela el <b>'Foco Burocrático'</b>. Muestra a qué instituciones del Estado planean recurrir o reformar. Si un partido menciona mucho al 'MEP' y la 'CCSS', su prioridad es el Estado de Bienestar. Si menciona 'Hacienda' y 'Banco Central', su prioridad es macroeconómica.")
             else: st.warning("Sin datos.")
         with c2:
             df_l = count_entities(df_m, LUGARES)
             if not df_l.empty:
                 fig = px.bar(df_l, x='Entidad', y='Menciones', color='Partido', title="Foco Territorial")
                 st.plotly_chart(fig, use_container_width=True)
-                interpretacion("Foco Geográfico: Regiones prioritarias.")
+                interpretacion("Mapa de calor verbal geográfico. ¿Qué regiones existen en la mente del candidato?<br><br>Revela si el plan es <b>'San José-céntrico'</b> (pocas menciones a provincias) o si tiene una verdadera visión periférica (muchas menciones a Limón, Guanacaste o Zona Norte).")
             else: st.warning("Sin datos.")
 
     elif menu == "5. Semántica Profunda":
@@ -371,7 +355,7 @@ if df is not None:
                 wc = generar_nube(txt_p)
                 fig, ax = plt.subplots(figsize=(10, 5))
                 ax.imshow(wc, interpolation='bilinear'); ax.axis("off"); st.pyplot(fig)
-            interpretacion("Palabras más repetidas (Obsesión discursiva).")
+            interpretacion("Visualización de frecuencia pura. El tamaño de la palabra es proporcional a sus repeticiones en el texto. Las palabras centrales y grandes definen la <b>'obsesión discursiva'</b> del candidato. Si 'Seguridad' es gigante, ese es su eje rector.")
         with t2:
             grouped = df_m.groupby('partido')['texto'].apply(lambda x: ' '.join(x.astype(str))).reset_index()
             if len(grouped) > 1:
@@ -380,7 +364,7 @@ if df is not None:
                 sim = cosine_similarity(matriz)
                 fig = px.imshow(sim, x=grouped['partido'], y=grouped['partido'], text_auto='.2f', color_continuous_scale='Blues', height=600)
                 st.plotly_chart(fig, use_container_width=True)
-                interpretacion("1.0 = Idénticos. 0.0 = Opuestos.")
+                interpretacion("Matriz de Convergencia Discursiva (Cosine Similarity).<br><br><b>1.0:</b> Planes idénticos (copia exacta).<br><b>0.0:</b> Planes totalmente opuestos (no comparten palabras clave).<br>Un valor alto (ej: 0.85) entre dos partidos sugiere que compiten por el mismo nicho electoral o que tienen agendas compatibles para una alianza.")
 
     elif menu == "6. Buscador Avanzado":
         st.markdown("## 🔎 Explorador Semántico")
