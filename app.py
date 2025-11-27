@@ -10,6 +10,7 @@ from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import PCA
+import spacy
 
 # --- 1. CONFIGURACIÓN VISUAL ---
 st.set_page_config(
@@ -19,7 +20,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. DISEÑO UI/UX (Clean & Professional) ---
+# --- 2. FUNCIÓN DE CARGA NLP (CORREGIDA Y ROBUSTA) ---
+@st.cache_resource
+def cargar_modelo_nlp():
+    """
+    Carga el modelo de lenguaje de Spacy.
+    Si no existe en el sistema (ej. en la nube), lo descarga automáticamente
+    durante la ejecución para evitar errores de instalación.
+    """
+    try:
+        if not spacy.util.is_package("es_core_news_sm"):
+            os.system("python -m spacy download es_core_news_sm")
+        return spacy.load("es_core_news_sm")
+    except Exception as e:
+        st.error(f"Error cargando modelo NLP: {e}")
+        return None
+
+nlp = cargar_modelo_nlp()
+
+# --- 3. DISEÑO UI/UX AVANZADO ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
@@ -27,7 +46,8 @@ st.markdown("""
     :root {
         --primary-blue: #1e3a8a;
         --accent-cyan: #0ea5e9;
-        --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        --interactive: #4f46e5;
+        --bg-gradient: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
     }
 
     .stApp { background: var(--bg-gradient); font-family: 'Inter', sans-serif; }
@@ -44,24 +64,23 @@ st.markdown("""
     .logo-highlight { color: var(--accent-cyan); }
     .logo-sub { font-size: 1rem; color: #64748b; font-weight: 600; letter-spacing: 0.05em; }
 
-    /* FOOTER */
+    /* FOOTER CLEAN */
     .footer-container {
-        margin-top: 4rem; padding: 2rem; background: var(--primary-blue);
+        margin-top: 4rem; padding: 1.5rem; background: var(--primary-blue);
         color: white; border-radius: 12px 12px 0 0; text-align: center; font-size: 0.9rem;
         opacity: 0.95;
     }
 
-    /* Tarjetas de Perfil */
+    /* Cards */
     .party-card {
         background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px;
-        border-left: 5px solid var(--accent-cyan); box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border-left: 5px solid var(--interactive); box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         transition: transform 0.2s; height: 100%;
     }
     .party-card:hover { transform: translateY(-3px); }
     .party-header { font-size: 1.2rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 5px; }
-    .party-sub { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;}
     
-    /* Cajas de Interpretación (Restauradas) */
+    /* Cajas de Interpretación (Amplias) */
     .interpretation-box {
         background-color: #ffffff; border-left: 5px solid var(--accent-cyan); padding: 20px;
         border-radius: 8px; font-size: 0.95rem; color: #334155; margin-top: 20px;
@@ -74,11 +93,12 @@ st.markdown("""
     }
     
     .author-box { background-color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .author-header { font-size: 1.4rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 5px; }
     .stPlotlyChart { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# HEADER GRÁFICO
+# HEADER
 st.markdown("""
     <div class="header-container">
         <div class="logo-badge">🇨🇷</div>
@@ -89,7 +109,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 3. DATOS ---
+# --- 4. DATOS ---
 INFO_PARTIDOS = {
     "Agenda Ciudadana": {"Candidato": "Claudia Dobles", "Equipo": "Andrea Centeno, Luis F. Arauz", "Tendencia": "Centro-progresismo", "Estrategia": "Rebranding del PAC."},
     "Partido Liberación Nacional": {"Candidato": "Álvaro Ramos", "Equipo": "Karen Segura, Xinia Chaves", "Tendencia": "Socialdemocracia", "Estrategia": "Ruptura técnica con figuras tradicionales."},
@@ -153,7 +173,7 @@ El pipeline de datos incluye:
 3.  **Enriquecimiento:** Cálculo de variables sintéticas (índices de estatismo, mercado, etc.).
 """
 
-# --- 4. CARGA DE DATOS ---
+# --- 5. CARGA DE DATOS ---
 STOPWORDS_BASURA = {
     'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'una', 'por', 'con', 'no', 'su', 'sus', 'para', 'al', 'lo', 'como', 'más', 'pero', 'o', 'este', 'esta', 'son', 'ese', 'esa', 'si', 'sin', 'sobre', 'entre', 'ya', 'todo', 'toda', 'todos', 'todas', 'esta', 'estos', 'estas', 'nos', 'ni', 'muy', 'donde', 'que', 'qué', 'uno', 'dos', 'tres', 'parte', 'tiene', 'tienen', 'ser', 'es', 'fue', 'sido', 'está', 'están', 'sea', 'sean', 'ante', 'bajo', 'cabe', 'contra', 'desde', 'durante', 'hacia', 'hasta', 'mediante', 'para', 'según', 'so', 'tras', 'versus', 'vía', 
     'costa', 'rica', 'nacional', 'país', 'gobierno', 'plan', 'programa', 'propuesta', 'desarrollo', 'social', 'política', 'sistema', 'servicio', 'servicios', 'sector', 'sectores', 'hacer', 'cada', 'año', 'años', '2026', '2030', 'acciones', 'objetivo', 'estrategia', 'marco', 'nivel', 'forma', 'manera', 'caso', 'tema', 'temas', 'través', 'además', 'así', 'ello', 'bien', 'gran', 'mismo', 'fin', 'tal', 'vez', 'cual', 'cuales', 'debe', 'ser', 'parte', 'tipo', 'siguiente', 'san', 'josé', 'jose', 'república', 'central', 'general', 'materia', 'ámbito', 'punto', 'página', 'artículo',
@@ -163,10 +183,17 @@ STOPWORDS_BASURA = {
 @st.cache_data
 def cargar_datos():
     ruta = '/Users/david/Documents/Ideas de investigaciones/Planes gobierno/Prueba2/Base_Enriquecida_IA.xlsx'
-    if not os.path.exists(ruta): return None
-    df = pd.read_excel(ruta)
+    # Si no encuentra el Excel, busca el CSV (por compatibilidad con la nube)
+    if not os.path.exists(ruta):
+        ruta_csv = 'datos.csv'
+        if os.path.exists(ruta_csv):
+            df = pd.read_csv(ruta_csv)
+        else:
+            return None
+    else:
+        df = pd.read_excel(ruta)
     
-    # MAPEO DE SIGLAS -> NOMBRES OFICIALES
+    # Normalización de Nombres
     NOMBRES = {
         "PSD": "Progreso Social Democrático", "PLN": "Partido Liberación Nacional", "PUSC": "Partido Unidad Social Cristiana",
         "PAC": "Agenda Ciudadana", "FA": "Frente Amplio", "PLP": "Partido Liberal Progresista",
@@ -193,7 +220,7 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# --- 5. FUNCIONES ANALÍTICAS ---
+# --- 6. FUNCIONES ANALÍTICAS ---
 def generar_insight_texto(df_sub, variable, nombre_variable, tipo="max"):
     if tipo == "max":
         dato = df_sub.groupby('partido')[variable].mean().sort_values(ascending=False)
@@ -213,17 +240,19 @@ def generar_nube(texto):
 def interpretacion(texto):
     st.markdown(f"""<div class='interpretation-box'><span class='interpretation-title'>📘 Guía de Interpretación</span>{texto}</div>""", unsafe_allow_html=True)
 
-# --- 6. INTERFAZ PRINCIPAL ---
+# --- 7. INTERFAZ PRINCIPAL ---
 
 if df is not None:
     
-    # SIDEBAR
+    # SIDEBAR (SIN BOTONES, SOLO SELECTOR)
     with st.sidebar:
-        st.header("Panel de Control")
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Coat_of_arms_of_Costa_Rica.svg/200px-Coat_of_arms_of_Costa_Rica.svg.png", width=60)
+        st.title("Monitor 2026")
+        st.markdown("---")
         
         lista_partidos = sorted(df['partido'].unique())
         
-        # SELECTOR SIMPLE Y ROBUSTO
+        # Selector Robusto
         partidos = st.multiselect(
             "Seleccione Partidos a Comparar:", 
             lista_partidos, 
@@ -241,7 +270,7 @@ if df is not None:
             st.warning("⚠️ Selecciona al menos un partido.")
             st.stop()
 
-    # Filtrar datos para análisis
+    # Filtrar datos
     df_m = df[df['partido'].isin(partidos)]
 
     # --- MÓDULO 1: VISIÓN ESTRATÉGICA ---
@@ -367,7 +396,7 @@ if df is not None:
         with t1:
             col_sel, col_wc = st.columns([1, 3])
             with col_sel:
-                # CORRECCIÓN DEFINITIVA DE VARIABLE
+                # Variable 'partidos' proviene del multiselect lateral
                 p_sel = st.radio("Ver nube de:", partidos)
             with col_wc:
                 txt_p = " ".join(df_m[df_m['partido']==p_sel]['texto'].astype(str))
@@ -390,7 +419,6 @@ if df is not None:
 
     # --- MÓDULO 6: BUSCADOR ---
     elif menu == "6. Buscador Avanzado":
-        # Hero Section
         st.markdown("""
         <div style='background: linear-gradient(135deg, var(--primary-blue) 0%, var(--interactive) 100%); padding: 40px; border-radius: 15px; color: white; text-align: center; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);'>
             <h2 style='color: white !important;'>🔎 Explorador Semántico de Propuestas</h2>
@@ -417,12 +445,7 @@ if df is not None:
                 else: st.warning("No se encontraron resultados para ese término.")
         
         with c_guide:
-            st.info("""
-            **💡 Tips de Búsqueda:**
-            * Usa términos raíz (ej: "segur" para hallar seguridad y seguro).
-            * Prueba conceptos opuestos (ej: "gasto" vs "inversión").
-            * Busca nombres propios (ej: "Chaves", "Figueres").
-            """)
+            st.info("**💡 Tips de Búsqueda:**\n* Usa términos raíz (ej: 'segur' para hallar seguridad y seguro).\n* Prueba conceptos opuestos (ej: 'gasto' vs 'inversión').")
 
     # --- MÓDULO 7: PERFILES PARTIDARIOS ---
     elif menu == "7. Perfiles Partidarios":
