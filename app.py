@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. DISEÑO UI/UX AVANZADO ---
+# --- 2. DISEÑO UI/UX (Clean & Professional) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
@@ -27,8 +27,7 @@ st.markdown("""
     :root {
         --primary-blue: #1e3a8a;
         --accent-cyan: #0ea5e9;
-        --interactive: #4f46e5;
-        --bg-gradient: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     }
 
     .stApp { background: var(--bg-gradient); font-family: 'Inter', sans-serif; }
@@ -47,21 +46,22 @@ st.markdown("""
 
     /* FOOTER */
     .footer-container {
-        margin-top: 4rem; padding: 1.5rem; background: var(--primary-blue);
+        margin-top: 4rem; padding: 2rem; background: var(--primary-blue);
         color: white; border-radius: 12px 12px 0 0; text-align: center; font-size: 0.9rem;
+        opacity: 0.95;
     }
-    .footer-link { color: var(--accent-cyan); font-weight: 700; text-decoration: none; }
 
-    /* Cards */
+    /* Tarjetas de Perfil */
     .party-card {
         background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px;
-        border-left: 5px solid var(--interactive); box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border-left: 5px solid var(--accent-cyan); box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         transition: transform 0.2s; height: 100%;
     }
     .party-card:hover { transform: translateY(-3px); }
     .party-header { font-size: 1.2rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 5px; }
+    .party-sub { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;}
     
-    /* Cajas de Interpretación (Restauradas Amplias) */
+    /* Cajas de Interpretación (Restauradas) */
     .interpretation-box {
         background-color: #ffffff; border-left: 5px solid var(--accent-cyan); padding: 20px;
         border-radius: 8px; font-size: 0.95rem; color: #334155; margin-top: 20px;
@@ -74,12 +74,11 @@ st.markdown("""
     }
     
     .author-box { background-color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-    .author-header { font-size: 1.4rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 5px; }
     .stPlotlyChart { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# HEADER
+# HEADER GRÁFICO
 st.markdown("""
     <div class="header-container">
         <div class="logo-badge">🇨🇷</div>
@@ -136,6 +135,25 @@ AUTOR_HTML = """
 </div>
 """
 
+METODOLOGIA_TEXTO = """
+### 1. Fundamentos Teóricos
+El análisis se basa en la metodología del **Comparative Manifestos Project (CMP)**, el estándar académico global para el análisis de contenido político. Utilizamos técnicas de **Procesamiento de Lenguaje Natural (NLP)** para transformar texto no estructurado (PDFs) en datos cuantificables.
+
+### 2. Variables y Algoritmos
+* **Volumen de Propuestas (Corpus Size):** Cantidad total de unidades de sentido (párrafos o bloques semánticos) extraídos tras la limpieza de ruido.
+* **Análisis de Sentimiento (Polarity):** Se utiliza el algoritmo *TextBlob* con léxicos adaptados. Asigna un valor de -1 (Muy Negativo/Crítico) a +1 (Muy Positivo/Esperanzador).
+* **Complejidad Léxica (Readability):** Calculada mediante el índice de *Fernandez-Huerta* para español. Mide la dificultad de lectura basándose en la longitud de las oraciones y la cantidad de sílabas. Un puntaje bajo indica lenguaje técnico/elitista; un puntaje alto indica lenguaje simple/populista.
+* **Similitud del Coseno (Cosine Similarity):** Se vectorizan los textos usando **TF-IDF** (Term Frequency-Inverse Document Frequency) para crear un espacio vectorial de n-dimensiones. Se calcula el ángulo entre los vectores de cada partido para determinar qué tan similares son sus propuestas matemáticamente (0 = Opuestos, 1 = Idénticos).
+* **Modelado de Tópicos (Topic Modeling):** Clasificación semántica basada en diccionarios de palabras clave ponderadas (Economía, Social, Seguridad, etc.) para determinar la agenda prioritaria.
+
+### 3. Procesamiento de Datos (ETL)
+El pipeline de datos incluye:
+1.  **Extracción:** Uso de `PyMuPDF` para lectura espacial de PDFs (respetando columnas).
+2.  **Limpieza:** Eliminación de *stopwords* (palabras vacías), encabezados y pies de página mediante Regex.
+3.  **Enriquecimiento:** Cálculo de variables sintéticas (índices de estatismo, mercado, etc.).
+"""
+
+# --- 4. CARGA DE DATOS ---
 STOPWORDS_BASURA = {
     'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'una', 'por', 'con', 'no', 'su', 'sus', 'para', 'al', 'lo', 'como', 'más', 'pero', 'o', 'este', 'esta', 'son', 'ese', 'esa', 'si', 'sin', 'sobre', 'entre', 'ya', 'todo', 'toda', 'todos', 'todas', 'esta', 'estos', 'estas', 'nos', 'ni', 'muy', 'donde', 'que', 'qué', 'uno', 'dos', 'tres', 'parte', 'tiene', 'tienen', 'ser', 'es', 'fue', 'sido', 'está', 'están', 'sea', 'sean', 'ante', 'bajo', 'cabe', 'contra', 'desde', 'durante', 'hacia', 'hasta', 'mediante', 'para', 'según', 'so', 'tras', 'versus', 'vía', 
     'costa', 'rica', 'nacional', 'país', 'gobierno', 'plan', 'programa', 'propuesta', 'desarrollo', 'social', 'política', 'sistema', 'servicio', 'servicios', 'sector', 'sectores', 'hacer', 'cada', 'año', 'años', '2026', '2030', 'acciones', 'objetivo', 'estrategia', 'marco', 'nivel', 'forma', 'manera', 'caso', 'tema', 'temas', 'través', 'además', 'así', 'ello', 'bien', 'gran', 'mismo', 'fin', 'tal', 'vez', 'cual', 'cuales', 'debe', 'ser', 'parte', 'tipo', 'siguiente', 'san', 'josé', 'jose', 'república', 'central', 'general', 'materia', 'ámbito', 'punto', 'página', 'artículo',
@@ -223,7 +241,7 @@ if df is not None:
             st.warning("⚠️ Selecciona al menos un partido.")
             st.stop()
 
-    # Filtrar datos con la selección
+    # Filtrar datos para análisis
     df_m = df[df['partido'].isin(partidos)]
 
     # --- MÓDULO 1: VISIÓN ESTRATÉGICA ---
@@ -349,9 +367,9 @@ if df is not None:
         with t1:
             col_sel, col_wc = st.columns([1, 3])
             with col_sel:
+                # CORRECCIÓN DEFINITIVA DE VARIABLE
                 p_sel = st.radio("Ver nube de:", partidos)
             with col_wc:
-                # CORRECCIÓN DE ERROR ANTERIOR: Aseguramos que 'partidos' esté disponible
                 txt_p = " ".join(df_m[df_m['partido']==p_sel]['texto'].astype(str))
                 wc = generar_nube(txt_p)
                 fig, ax = plt.subplots(figsize=(10, 5))
@@ -436,52 +454,15 @@ if df is not None:
         t1, t2 = st.tabs(["🔬 Metodología Científica", "👨‍💻 Dirección del Proyecto"])
         
         with t1:
-            st.markdown("""
-            ### 1. Fundamentos Teóricos
-            El análisis se basa en la metodología del **Comparative Manifestos Project (CMP)**, el estándar académico global para el análisis de contenido político. Utilizamos técnicas de **Procesamiento de Lenguaje Natural (NLP)** para transformar texto no estructurado (PDFs) en datos cuantificables.
-
-            ### 2. Variables y Algoritmos
-            * **Volumen de Propuestas (Corpus Size):** Cantidad total de unidades de sentido (párrafos o bloques semánticos) extraídos tras la limpieza de ruido.
-            * **Análisis de Sentimiento (Polarity):** Se utiliza el algoritmo *TextBlob* con léxicos adaptados. Asigna un valor de -1 (Muy Negativo/Crítico) a +1 (Muy Positivo/Esperanzador).
-            * **Complejidad Léxica (Readability):** Calculada mediante el índice de *Fernandez-Huerta* para español. Mide la dificultad de lectura basándose en la longitud de las oraciones y la cantidad de sílabas. Un puntaje bajo indica lenguaje técnico/elitista; un puntaje alto indica lenguaje simple/populista.
-            * **Similitud del Coseno (Cosine Similarity):** Se vectorizan los textos usando **TF-IDF** (Term Frequency-Inverse Document Frequency) para crear un espacio vectorial de n-dimensiones. Se calcula el ángulo entre los vectores de cada partido para determinar qué tan similares son sus propuestas matemáticamente (0 = Opuestos, 1 = Idénticos).
-            * **Modelado de Tópicos (Topic Modeling):** Clasificación semántica basada en diccionarios de palabras clave ponderadas (Economía, Social, Seguridad, etc.) para determinar la agenda prioritaria.
-
-            ### 3. Procesamiento de Datos (ETL)
-            El pipeline de datos incluye:
-            1.  **Extracción:** Uso de `PyMuPDF` para lectura espacial de PDFs (respetando columnas).
-            2.  **Limpieza:** Eliminación de *stopwords* (palabras vacías), encabezados y pies de página mediante Regex.
-            3.  **Enriquecimiento:** Cálculo de variables sintéticas (índices de estatismo, mercado, etc.).
-            """)
+            st.markdown(METODOLOGIA_TEXTO)
             st.info("Este proyecto utiliza librerías de código abierto: Scikit-Learn (Machine Learning), TextBlob (NLP), Spacy (Lingüística) y Plotly (Visualización).")
             
         with t2:
-            st.markdown("""
-            <div class='author-box'>
-                <div class='author-header'>David Arturo Chavarría Camacho, M.Sc.</div>
-                <div class='author-role'>Elaborado por</div>
-                <p><b>Formación Académica Superior:</b></p>
-                <ul>
-                    <li><b>Doctorado en Gestión Pública y Ciencias Empresariales</b> (PhD. Candidate) - <i>Instituto Centroamericano de Administración Pública (ICAP)</i></li>
-                    <li><b>Doctorado en Historia</b> (En curso) - <i>Universidad de Costa Rica (UCR)</i></li>
-                    <li><b>Maestría Académica en Historia</b> (Graduación de Honor, 2017) - <i>Universidad de Costa Rica</i></li>
-                    <li><b>Bachillerato en Historia</b> (2013) - <i>Universidad de Costa Rica</i></li>
-                    <li><b>Diplomado en Electrónica</b> (2008) - <i>Instituto Tecnológico de Costa Rica</i></li>
-                </ul>
-                <p><b>Trayectoria Profesional y Académica:</b></p>
-                <ul>
-                    <li><b>Docente e Investigador (2014-2025):</b> Escuela de Historia y Escuela de Estudios Generales, Universidad de Costa Rica.</li>
-                    <li><b>Investigación Especializada:</b> Investigador en el Centro de Investigaciones Históricas de América Central (CIHAC). Especialista en Historia Digital, Ciencia, Tecnología y Sociedad (CTS).</li>
-                </ul>
-                <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
-                <p style='font-size:0.95rem; color:#64748b;'>📧 <b>Contacto Institucional:</b> david.chavarriacamacho@ucr.ac.cr</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(AUTOR_HTML, unsafe_allow_html=True)
 
-    # --- INYECCIÓN DE FOOTER AL FINAL ---
+    # FOOTER
     st.markdown("""
     <div class="footer-container">
         <p>© 2025 VOTO 360°. Análisis basado en datos públicos.</p>
-        <p><a class="footer-link" href="#">Ver Metodología y Créditos</a></p>
     </div>
     """, unsafe_allow_html=True)
